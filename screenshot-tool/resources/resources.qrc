@@ -1,0 +1,7 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <!-- Application icons will be embedded here -->
+        <!-- For now, we use Qt's built-in icons -->
+    </qresource>
+</RCC>
