@@ -38,7 +38,26 @@ public:
         Selecting,  ///< 正在框选
         Selected,   ///< 已选择完成
         Moving,     ///< 正在移动选区
-        Resizing    ///< 正在调整选区大小
+        Resizing,   ///< 正在调整选区大小
+        Drawing     ///< 正在绘制标注
+    };
+    
+    /**
+     * @brief 标注工具类型
+     */
+    enum class AnnotationTool {
+        Select,     ///< 选择工具
+        Rectangle,  ///< 矩形标注
+        Arrow       ///< 箭头标注
+    };
+    
+    /**
+     * @brief 标注数据结构
+     */
+    struct Annotation {
+        AnnotationTool type;  ///< 标注类型
+        QPoint startPoint;    ///< 起始点
+        QPoint endPoint;      ///< 结束点
     };
     
     /**
@@ -161,6 +180,21 @@ private slots:
      * @brief 取消截图槽函数
      */
     void cancel();
+    
+    /**
+     * @brief 选择工具槽函数
+     */
+    void onSelectTool();
+    
+    /**
+     * @brief 矩形标注工具槽函数
+     */
+    void onRectangleTool();
+    
+    /**
+     * @brief 箭头标注工具槽函数
+     */
+    void onArrowTool();
 
 private:
     /**
@@ -186,6 +220,35 @@ private:
      * @param painter 绘图器
      */
     void drawResizeHandles(QPainter &painter);
+    
+    /**
+     * @brief 绘制所有标注
+     * @param painter 绘图器
+     */
+    void drawAnnotations(QPainter &painter);
+    
+    /**
+     * @brief 绘制单个标注
+     * @param painter 绘图器
+     * @param annotation 标注数据
+     */
+    void drawAnnotation(QPainter &painter, const Annotation &annotation);
+    
+    /**
+     * @brief 绘制矩形标注
+     * @param painter 绘图器
+     * @param start 起始点
+     * @param end 结束点
+     */
+    void drawRectangleAnnotation(QPainter &painter, const QPoint &start, const QPoint &end);
+    
+    /**
+     * @brief 绘制箭头标注
+     * @param painter 绘图器
+     * @param start 起始点
+     * @param end 结束点
+     */
+    void drawArrowAnnotation(QPainter &painter, const QPoint &start, const QPoint &end);
     
     /**
      * @brief 更新工具栏位置
@@ -235,10 +298,18 @@ private:
     // 工具栏
     ToolBar *m_toolBar;             ///< 操作工具栏
     
+    // 标注相关
+    AnnotationTool m_currentTool;   ///< 当前选中的标注工具
+    QVector<Annotation> m_annotations; ///< 所有标注
+    QPoint m_annotationStart;       ///< 当前绘制的标注起始点
+    QPoint m_annotationEnd;         ///< 当前绘制的标注结束点
+    
     // UI 常量
     static constexpr int HANDLE_SIZE = 8;           ///< 调整句柄大小
     static constexpr int BORDER_WIDTH = 2;          ///< 边框宽度
     static constexpr int MIN_SELECTION_SIZE = 10;   ///< 最小选区尺寸
+    static constexpr int ANNOTATION_LINE_WIDTH = 3; ///< 标注线条宽度
+    static constexpr int ARROW_HEAD_SIZE = 12;      ///< 箭头头部大小
 };
 
 #endif // SELECTIONOVERLAY_H

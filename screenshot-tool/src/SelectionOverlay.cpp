@@ -3,6 +3,8 @@
  * @brief 选区覆盖层类实现
  */
 
+#include <cmath>
+
 #include "SelectionOverlay.h"
 #include "ToolBar.h"
 
@@ -13,6 +15,10 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // 定义日志分类
 Q_LOGGING_CATEGORY(logSelectionOverlay, "screenshot.overlay")
 
@@ -21,6 +27,7 @@ SelectionOverlay::SelectionOverlay(QWidget *parent)
     , m_state(SelectionState::None)
     , m_activeHandle(ResizeHandle::None)
     , m_toolBar(new ToolBar(this))
+    , m_currentTool(AnnotationTool::Select)
 {
     qCDebug(logSelectionOverlay) << "初始化选区覆盖层";
     
@@ -44,6 +51,9 @@ SelectionOverlay::SelectionOverlay(QWidget *parent)
     connect(m_toolBar, &ToolBar::confirmClicked, this, &SelectionOverlay::confirmCapture);
     connect(m_toolBar, &ToolBar::saveClicked, this, &SelectionOverlay::saveToFile);
     connect(m_toolBar, &ToolBar::cancelClicked, this, &SelectionOverlay::cancel);
+    connect(m_toolBar, &ToolBar::selectToolClicked, this, &SelectionOverlay::onSelectTool);
+    connect(m_toolBar, &ToolBar::rectangleToolClicked, this, &SelectionOverlay::onRectangleTool);
+    connect(m_toolBar, &ToolBar::arrowToolClicked, this, &SelectionOverlay::onArrowTool);
     
     qCDebug(logSelectionOverlay) << "选区覆盖层初始化完成";
 }
@@ -64,6 +74,10 @@ void SelectionOverlay::setScreenshot(const QPixmap &screenshot)
     m_state = SelectionState::None;
     m_startPoint = QPoint();
     m_endPoint = QPoint();
+    
+    // 重置标注状态
+    m_currentTool = AnnotationTool::Select;
+    m_annotations.clear();
     
     // 隐藏工具栏
     m_toolBar->hide();
@@ -93,7 +107,62 @@ QPixmap SelectionOverlay::getSelectedPixmap() const
         selection.height() * dpr
     );
     
-    return m_screenshot.copy(scaledRect);
+    QPixmap result = m_screenshot.copy(scaledRect);
+    
+    // 如果有标注，绘制到结果上
+    if (!m_annotations.isEmpty()) {
+        QPainter painter(&result);
+        painter.setRenderHint(QPainter::Antialiasing);
+        
+        // 设置画笔（红色，固定粗细）
+        QPen pen(QColor(255, 0, 0), ANNOTATION_LINE_WIDTH * dpr);
+        pen.setJoinStyle(Qt::MiterJoin);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        
+        // 绘制每个标注
+        for (const Annotation &annotation : m_annotations) {
+            // 计算相对于选区的坐标
+            QPoint start = annotation.startPoint - selection.topLeft();
+            QPoint end = annotation.endPoint - selection.topLeft();
+            
+            // 缩放坐标
+            start = QPoint(start.x() * dpr, start.y() * dpr);
+            end = QPoint(end.x() * dpr, end.y() * dpr);
+            
+            if (annotation.type == AnnotationTool::Rectangle) {
+                painter.drawRect(QRect(start, end).normalized());
+            } else if (annotation.type == AnnotationTool::Arrow) {
+                // 绘制箭头线
+                painter.drawLine(start, end);
+                
+                // 计算箭头头部
+                double angle = std::atan2(end.y() - start.y(), end.x() - start.x());
+                int arrowSize = ARROW_HEAD_SIZE * dpr;
+                
+                QPointF p1 = end - QPointF(
+                    arrowSize * std::cos(angle - M_PI / 6),
+                    arrowSize * std::sin(angle - M_PI / 6)
+                );
+                QPointF p2 = end - QPointF(
+                    arrowSize * std::cos(angle + M_PI / 6),
+                    arrowSize * std::sin(angle + M_PI / 6)
+                );
+                
+                // 绘制箭头头部（填充）
+                painter.setBrush(QColor(255, 0, 0));
+                QPainterPath arrowPath;
+                arrowPath.moveTo(end);
+                arrowPath.lineTo(p1);
+                arrowPath.lineTo(p2);
+                arrowPath.closeSubpath();
+                painter.drawPath(arrowPath);
+                painter.setBrush(Qt::NoBrush);
+            }
+        }
+    }
+    
+    return result;
 }
 
 void SelectionOverlay::paintEvent(QPaintEvent *event)
@@ -115,13 +184,25 @@ void SelectionOverlay::paintEvent(QPaintEvent *event)
     drawMask(painter);
     
     // 如果有选区，绘制边框和句柄
-    if (m_state != SelectionState::None) {
+    if (m_state != SelectionState::None && m_state != SelectionState::Drawing) {
         drawSelectionBorder(painter);
         drawSizeHint(painter);
         
         if (m_state == SelectionState::Selected) {
             drawResizeHandles(painter);
         }
+    }
+    
+    // 绘制所有标注
+    drawAnnotations(painter);
+    
+    // 绘制正在绘制的标注预览
+    if (m_state == SelectionState::Drawing) {
+        Annotation preview;
+        preview.type = m_currentTool;
+        preview.startPoint = m_annotationStart;
+        preview.endPoint = m_annotationEnd;
+        drawAnnotation(painter, preview);
     }
 }
 
@@ -455,6 +536,17 @@ void SelectionOverlay::mousePressEvent(QMouseEvent *event)
     QPoint pos = event->pos();
     m_lastMousePos = pos;
     
+    // 如果当前是标注工具，开始绘制标注
+    if (m_currentTool != AnnotationTool::Select) {
+        m_state = SelectionState::Drawing;
+        m_annotationStart = pos;
+        m_annotationEnd = pos;
+        qCDebug(logSelectionOverlay) << "开始绘制标注，起始点:" << pos;
+        update();
+        return;
+    }
+    
+    // 选择工具模式下的原有逻辑
     if (m_state == SelectionState::Selected) {
         // 检测是否点击了调整句柄
         ResizeHandle handle = hitTestHandle(pos);
@@ -507,6 +599,10 @@ void SelectionOverlay::mouseMoveEvent(QMouseEvent *event)
     // 处理拖拽
     if (event->buttons() & Qt::LeftButton) {
         switch (m_state) {
+        case SelectionState::Drawing:
+            m_annotationEnd = pos;
+            break;
+            
         case SelectionState::Selecting:
             m_endPoint = pos;
             break;
@@ -577,6 +673,34 @@ void SelectionOverlay::mouseMoveEvent(QMouseEvent *event)
 void SelectionOverlay::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton) {
+        return;
+    }
+    
+    // 处理标注绘制完成
+    if (m_state == SelectionState::Drawing) {
+        // 检查标注是否有效（有一定大小）
+        int dx = m_annotationEnd.x() - m_annotationStart.x();
+        int dy = m_annotationEnd.y() - m_annotationStart.y();
+        int distance = qSqrt(dx * dx + dy * dy);
+        
+        if (distance >= MIN_SELECTION_SIZE) {
+            Annotation annotation;
+            annotation.type = m_currentTool;
+            annotation.startPoint = m_annotationStart;
+            annotation.endPoint = m_annotationEnd;
+            m_annotations.append(annotation);
+            
+            qCInfo(logSelectionOverlay) << "标注完成，类型:" 
+                << (m_currentTool == AnnotationTool::Rectangle ? "矩形" : "箭头")
+                << "起始点:" << m_annotationStart 
+                << "结束点:" << m_annotationEnd;
+        } else {
+            qCDebug(logSelectionOverlay) << "标注太小，已忽略";
+        }
+        
+        // 保持当前工具，继续等待下一次绘制
+        m_state = SelectionState::Selected;
+        update();
         return;
     }
     
@@ -721,4 +845,78 @@ void SelectionOverlay::cancel()
 {
     qCInfo(logSelectionOverlay) << "取消截图";
     emit captureCancelled();
+}
+
+void SelectionOverlay::onSelectTool()
+{
+    m_currentTool = AnnotationTool::Select;
+    qCDebug(logSelectionOverlay) << "切换到选择工具";
+}
+
+void SelectionOverlay::onRectangleTool()
+{
+    m_currentTool = AnnotationTool::Rectangle;
+    qCDebug(logSelectionOverlay) << "切换到矩形标注工具";
+}
+
+void SelectionOverlay::onArrowTool()
+{
+    m_currentTool = AnnotationTool::Arrow;
+    qCDebug(logSelectionOverlay) << "切换到箭头标注工具";
+}
+
+void SelectionOverlay::drawAnnotations(QPainter &painter)
+{
+    for (const Annotation &annotation : m_annotations) {
+        drawAnnotation(painter, annotation);
+    }
+}
+
+void SelectionOverlay::drawAnnotation(QPainter &painter, const Annotation &annotation)
+{
+    // 设置画笔（红色，固定粗细）
+    QPen pen(QColor(255, 0, 0), ANNOTATION_LINE_WIDTH);
+    pen.setJoinStyle(Qt::MiterJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    
+    if (annotation.type == AnnotationTool::Rectangle) {
+        drawRectangleAnnotation(painter, annotation.startPoint, annotation.endPoint);
+    } else if (annotation.type == AnnotationTool::Arrow) {
+        drawArrowAnnotation(painter, annotation.startPoint, annotation.endPoint);
+    }
+}
+
+void SelectionOverlay::drawRectangleAnnotation(QPainter &painter, const QPoint &start, const QPoint &end)
+{
+    QRect rect = QRect(start, end).normalized();
+    painter.drawRect(rect);
+}
+
+void SelectionOverlay::drawArrowAnnotation(QPainter &painter, const QPoint &start, const QPoint &end)
+{
+    // 绘制箭头线
+    painter.drawLine(start, end);
+    
+    // 计算箭头头部
+    double angle = std::atan2(end.y() - start.y(), end.x() - start.x());
+    
+    QPointF p1 = end - QPointF(
+        ARROW_HEAD_SIZE * std::cos(angle - M_PI / 6),
+        ARROW_HEAD_SIZE * std::sin(angle - M_PI / 6)
+    );
+    QPointF p2 = end - QPointF(
+        ARROW_HEAD_SIZE * std::cos(angle + M_PI / 6),
+        ARROW_HEAD_SIZE * std::sin(angle + M_PI / 6)
+    );
+    
+    // 绘制箭头头部（填充）
+    painter.setBrush(QColor(255, 0, 0));
+    QPainterPath arrowPath;
+    arrowPath.moveTo(end);
+    arrowPath.lineTo(p1);
+    arrowPath.lineTo(p2);
+    arrowPath.closeSubpath();
+    painter.drawPath(arrowPath);
+    painter.setBrush(Qt::NoBrush);
 }

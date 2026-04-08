@@ -72,6 +72,21 @@ signals:
      * @brief 取消按钮点击信号
      */
     void cancelClicked();
+    
+    /**
+     * @brief 矩形标注工具点击信号
+     */
+    void rectangleToolClicked();
+    
+    /**
+     * @brief 箭头标注工具点击信号
+     */
+    void arrowToolClicked();
+    
+    /**
+     * @brief 选择工具点击信号（用于移动选区）
+     */
+    void selectToolClicked();
 
 protected:
     /**
@@ -115,6 +130,9 @@ private:
     QPushButton *m_confirmBtn;   ///< 确认按钮
     QPushButton *m_saveBtn;      ///< 保存按钮
     QPushButton *m_cancelBtn;    ///< 取消按钮
+    QPushButton *m_selectBtn;    ///< 选择工具按钮
+    QPushButton *m_rectBtn;      ///< 矩形标注按钮
+    QPushButton *m_arrowBtn;     ///< 箭头标注按钮
 };
 
 #endif // TOOLBAR_H

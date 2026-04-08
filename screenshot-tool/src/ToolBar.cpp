@@ -20,6 +20,9 @@ ToolBar::ToolBar(QWidget *parent)
     , m_confirmBtn(nullptr)
     , m_saveBtn(nullptr)
     , m_cancelBtn(nullptr)
+    , m_selectBtn(nullptr)
+    , m_rectBtn(nullptr)
+    , m_arrowBtn(nullptr)
 {
     qCDebug(logToolBar) << "初始化工具栏";
     
@@ -53,7 +56,33 @@ void ToolBar::setupUI()
     m_layout->setContentsMargins(16, 8, 16, 8);  // 左右16，上下8
     m_layout->setSpacing(10);  // 按钮间距10px
     
-    // 创建三个按钮 - 纯文字，无图标
+    // 创建标注工具按钮
+    m_selectBtn = createActionButton("选择", ButtonType::Secondary);
+    m_selectBtn->setToolTip("选择/移动选区");
+    m_selectBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #EF4444;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #F87171;
+        }
+        QPushButton:pressed {
+            background-color: #DC2626;
+        }
+    )");
+    
+    m_rectBtn = createActionButton("矩形", ButtonType::Secondary);
+    m_rectBtn->setToolTip("矩形标注");
+    
+    m_arrowBtn = createActionButton("箭头", ButtonType::Secondary);
+    m_arrowBtn->setToolTip("箭头标注");
+    
+    // 创建操作按钮
     m_cancelBtn = createActionButton("取消", ButtonType::Danger);
     m_cancelBtn->setToolTip("取消截图 (ESC)");
     
@@ -64,11 +93,27 @@ void ToolBar::setupUI()
     m_confirmBtn->setToolTip("复制到剪贴板 (Enter)");
     
     // 连接信号
+    connect(m_selectBtn, &QPushButton::clicked, this, &ToolBar::selectToolClicked);
+    connect(m_rectBtn, &QPushButton::clicked, this, &ToolBar::rectangleToolClicked);
+    connect(m_arrowBtn, &QPushButton::clicked, this, &ToolBar::arrowToolClicked);
     connect(m_cancelBtn, &QPushButton::clicked, this, &ToolBar::cancelClicked);
     connect(m_saveBtn, &QPushButton::clicked, this, &ToolBar::saveClicked);
     connect(m_confirmBtn, &QPushButton::clicked, this, &ToolBar::confirmClicked);
     
+    // 添加分隔线
+    QFrame *separator1 = new QFrame();
+    separator1->setFrameShape(QFrame::VLine);
+    separator1->setStyleSheet("color: rgba(255, 255, 255, 0.3);");
+    
+    QFrame *separator2 = new QFrame();
+    separator2->setFrameShape(QFrame::VLine);
+    separator2->setStyleSheet("color: rgba(255, 255, 255, 0.3);");
+    
     // 添加到布局
+    m_layout->addWidget(m_selectBtn);
+    m_layout->addWidget(m_rectBtn);
+    m_layout->addWidget(m_arrowBtn);
+    m_layout->addWidget(separator1);
     m_layout->addWidget(m_cancelBtn);
     m_layout->addWidget(m_saveBtn);
     m_layout->addWidget(m_confirmBtn);
