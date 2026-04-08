@@ -42,7 +42,7 @@ ToolBar::~ToolBar()
 
 QSize ToolBar::sizeHint() const
 {
-    return QSize(420, 48);
+    return QSize(480, 48);
 }
 
 void ToolBar::setupShadow()
