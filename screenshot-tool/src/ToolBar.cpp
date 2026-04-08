@@ -23,6 +23,7 @@ ToolBar::ToolBar(QWidget *parent)
     , m_selectBtn(nullptr)
     , m_rectBtn(nullptr)
     , m_arrowBtn(nullptr)
+    , m_selectedTool(ToolType::Select)
 {
     qCDebug(logToolBar) << "初始化工具栏";
     
@@ -41,7 +42,7 @@ ToolBar::~ToolBar()
 
 QSize ToolBar::sizeHint() const
 {
-    return QSize(220, 48);
+    return QSize(420, 48);
 }
 
 void ToolBar::setupShadow()
@@ -53,33 +54,23 @@ void ToolBar::setupUI()
 {
     // 主布局
     m_layout = new QHBoxLayout(this);
-    m_layout->setContentsMargins(16, 8, 16, 8);  // 左右16，上下8
-    m_layout->setSpacing(10);  // 按钮间距10px
+    m_layout->setContentsMargins(12, 8, 12, 8);
+    m_layout->setSpacing(8);
     
     // 创建标注工具按钮
-    m_selectBtn = createActionButton("选择", ButtonType::Secondary);
+    m_selectBtn = new QPushButton("选择", this);
+    m_selectBtn->setCursor(Qt::PointingHandCursor);
+    m_selectBtn->setFixedSize(60, 32);
     m_selectBtn->setToolTip("选择/移动选区");
-    m_selectBtn->setStyleSheet(R"(
-        QPushButton {
-            background-color: #EF4444;
-            color: #FFFFFF;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        QPushButton:hover {
-            background-color: #F87171;
-        }
-        QPushButton:pressed {
-            background-color: #DC2626;
-        }
-    )");
     
-    m_rectBtn = createActionButton("矩形", ButtonType::Secondary);
+    m_rectBtn = new QPushButton("矩形", this);
+    m_rectBtn->setCursor(Qt::PointingHandCursor);
+    m_rectBtn->setFixedSize(60, 32);
     m_rectBtn->setToolTip("矩形标注");
     
-    m_arrowBtn = createActionButton("箭头", ButtonType::Secondary);
+    m_arrowBtn = new QPushButton("箭头", this);
+    m_arrowBtn->setCursor(Qt::PointingHandCursor);
+    m_arrowBtn->setFixedSize(60, 32);
     m_arrowBtn->setToolTip("箭头标注");
     
     // 创建操作按钮
@@ -93,30 +84,39 @@ void ToolBar::setupUI()
     m_confirmBtn->setToolTip("复制到剪贴板 (Enter)");
     
     // 连接信号
-    connect(m_selectBtn, &QPushButton::clicked, this, &ToolBar::selectToolClicked);
-    connect(m_rectBtn, &QPushButton::clicked, this, &ToolBar::rectangleToolClicked);
-    connect(m_arrowBtn, &QPushButton::clicked, this, &ToolBar::arrowToolClicked);
+    connect(m_selectBtn, &QPushButton::clicked, this, [this]() {
+        setSelectedTool(ToolType::Select);
+        emit selectToolClicked();
+    });
+    connect(m_rectBtn, &QPushButton::clicked, this, [this]() {
+        setSelectedTool(ToolType::Rectangle);
+        emit rectangleToolClicked();
+    });
+    connect(m_arrowBtn, &QPushButton::clicked, this, [this]() {
+        setSelectedTool(ToolType::Arrow);
+        emit arrowToolClicked();
+    });
     connect(m_cancelBtn, &QPushButton::clicked, this, &ToolBar::cancelClicked);
     connect(m_saveBtn, &QPushButton::clicked, this, &ToolBar::saveClicked);
     connect(m_confirmBtn, &QPushButton::clicked, this, &ToolBar::confirmClicked);
     
     // 添加分隔线
-    QFrame *separator1 = new QFrame();
-    separator1->setFrameShape(QFrame::VLine);
-    separator1->setStyleSheet("color: rgba(255, 255, 255, 0.3);");
-    
-    QFrame *separator2 = new QFrame();
-    separator2->setFrameShape(QFrame::VLine);
-    separator2->setStyleSheet("color: rgba(255, 255, 255, 0.3);");
+    QFrame *separator = new QFrame();
+    separator->setFrameShape(QFrame::VLine);
+    separator->setFixedWidth(1);
+    separator->setStyleSheet("background-color: rgba(255, 255, 255, 0.2);");
     
     // 添加到布局
     m_layout->addWidget(m_selectBtn);
     m_layout->addWidget(m_rectBtn);
     m_layout->addWidget(m_arrowBtn);
-    m_layout->addWidget(separator1);
+    m_layout->addWidget(separator);
     m_layout->addWidget(m_cancelBtn);
     m_layout->addWidget(m_saveBtn);
     m_layout->addWidget(m_confirmBtn);
+    
+    // 更新按钮样式
+    updateToolButtonStyles();
     
     adjustSize();
 }
@@ -258,4 +258,59 @@ void ToolBar::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(QColor(255, 255, 255, 20), 1));
     painter.setBrush(Qt::NoBrush);
     painter.drawRoundedRect(bgRect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
+}
+
+void ToolBar::setSelectedTool(ToolType tool)
+{
+    if (m_selectedTool != tool) {
+        m_selectedTool = tool;
+        updateToolButtonStyles();
+    }
+}
+
+void ToolBar::updateToolButtonStyles()
+{
+    const QString selectedStyle = R"(
+        QPushButton {
+            background-color: #EF4444;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #F87171;
+        }
+        QPushButton:pressed {
+            background-color: #DC2626;
+        }
+    )";
+    
+    const QString normalStyle = R"(
+        QPushButton {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        QPushButton:pressed {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+    )";
+    
+    if (m_selectBtn) {
+        m_selectBtn->setStyleSheet(m_selectedTool == ToolType::Select ? selectedStyle : normalStyle);
+    }
+    if (m_rectBtn) {
+        m_rectBtn->setStyleSheet(m_selectedTool == ToolType::Rectangle ? selectedStyle : normalStyle);
+    }
+    if (m_arrowBtn) {
+        m_arrowBtn->setStyleSheet(m_selectedTool == ToolType::Arrow ? selectedStyle : normalStyle);
+    }
 }

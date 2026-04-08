@@ -39,6 +39,15 @@ public:
         Danger,     ///< 危险按钮（红色）
         Secondary   ///< 次要按钮（灰色）
     };
+    
+    /**
+     * @brief 工具类型枚举
+     */
+    enum class ToolType {
+        Select,     ///< 选择工具
+        Rectangle,  ///< 矩形标注
+        Arrow       ///< 箭头标注
+    };
 
     /**
      * @brief 构造函数
@@ -56,6 +65,12 @@ public:
      * @return 推荐的工具栏尺寸
      */
     QSize sizeHint() const override;
+    
+    /**
+     * @brief 设置当前选中的工具
+     * @param tool 工具类型
+     */
+    void setSelectedTool(ToolType tool);
 
 signals:
     /**
@@ -126,6 +141,11 @@ private:
     void setupShadow();
 
 private:
+    /**
+     * @brief 更新工具按钮的选中状态样式
+     */
+    void updateToolButtonStyles();
+    
     QHBoxLayout *m_layout;       ///< 布局管理器
     QPushButton *m_confirmBtn;   ///< 确认按钮
     QPushButton *m_saveBtn;      ///< 保存按钮
@@ -133,6 +153,7 @@ private:
     QPushButton *m_selectBtn;    ///< 选择工具按钮
     QPushButton *m_rectBtn;      ///< 矩形标注按钮
     QPushButton *m_arrowBtn;     ///< 箭头标注按钮
+    ToolType m_selectedTool;     ///< 当前选中的工具
 };
 
 #endif // TOOLBAR_H
